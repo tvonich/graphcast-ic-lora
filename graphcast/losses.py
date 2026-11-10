@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Modified for graphcast-ic-lora (see NOTICE): adds custom_weighted_mse and point_mse with variable/level/time/region selection.
+# Modified for graphcast-ic-lora (see NOTICE): adds custom_weighted_mse and point_mse
+#   (variable/level/region selection) and retain_per_variable_losses; the diagnostics
+#   of sum_per_variable_losses are the weighted per-variable losses; relaxed latitude
+#   check for grids without poles; logging setup.
 """Loss functions (and terms for use in loss functions) used for weather."""
 
 from typing import Mapping, Union, List, Tuple
@@ -25,7 +28,7 @@ import xarray, logging
 pass_counter = 0
 LossAndDiagnostics = tuple[xarray.DataArray, xarray.Dataset]
 
-#Make Logger
+# Logging.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -56,7 +59,7 @@ class LossFunction(Protocol):
         should also have dimensions ('batch',) and will be averaged over the
         batch before logging.
     """
-#Mine
+# Added for graphcast-ic-lora.
 def custom_weighted_mse(
     predictions: xarray.Dataset,
     targets: xarray.Dataset,
@@ -67,20 +70,25 @@ def custom_weighted_mse(
     selected_levels: Union[list[float], str]
 ) -> LossAndDiagnostics:
     """
-    Custom latitude-, longitude-, level-, and variable-weighted MSE loss.
+    Latitude- and pressure-level-weighted MSE (as weighted_mse_per_level), with
+    optional selection of variables, pressure levels and a lat/lon region.
+
+    With selected_variables, selected_levels and selected_lat_lon_region all set
+    to 'all', this is the same loss as weighted_mse_per_level.
 
     Args:
       predictions: Dataset of predictions.
       targets: Dataset of targets.
-      per_variable_weights: Mapping from variable names to their respective weights in the loss calculation.
-      time_indices: Selected timesteps
-      selected_variables: List of variables to include in loss calculation or 'all' for all variables.
-      selected_lat_lon_region: Tuple specifying the latitude and longitude range or 'all' for the entire range.
-      selected_levels: List of pressure levels to include in the loss calculation or 'all' for all levels.
+      per_variable_weights: Mapping from variable names to their weights in the loss
+        (variables not listed are weighted 1).
+      selected_times: Not used; every time step in `predictions` is included.
+      selected_variables: List of variables to include, or 'all'.
+      selected_lat_lon_region: (lat_min, lat_max, lon_min, lon_max) to include, or 'all'.
+      selected_levels: List of pressure levels to include, or 'all'.
 
     Returns:
       loss: A DataArray with dimensions ('batch',) containing losses for each element of the batch.
-      diagnostics: Mapping of additional quantities to log by name alongside the loss.
+      diagnostics: Mapping from variable name to its weighted loss.
     """
 
     selected_times = predictions.time
@@ -131,20 +139,14 @@ def point_mse(
     selected_levels: Union[list[float], str]
 ) -> LossAndDiagnostics:
     """
-    Custom latitude-, longitude-, level-, and variable-weighted MSE loss.
+    Like custom_weighted_mse, but returns the weighted squared error at every grid
+    point and time (no averaging, no sum over variables).
 
-    Args:
-      predictions: Dataset of predictions.
-      targets: Dataset of targets.
-      per_variable_weights: Mapping from variable names to their respective weights in the loss calculation.
-      time_indices: Selected timesteps
-      selected_variables: List of variables to include in loss calculation or 'all' for all variables.
-      selected_lat_lon_region: Tuple specifying the latitude and longitude range or 'all' for the entire range.
-      selected_levels: List of pressure levels to include in the loss calculation or 'all' for all levels.
+    Args: as custom_weighted_mse (selected_times is not used).
 
     Returns:
-      loss: A DataArray with dimensions ('batch',) containing losses for each element of the batch.
-      diagnostics: Mapping of additional quantities to log by name alongside the loss.
+      Mapping from variable name to its weighted squared error, with the
+      dimensions of the inputs.
     """
 
     selected_times = predictions.time
@@ -223,8 +225,8 @@ def sum_per_variable_losses(
       weighted_per_variable_losses.values(), dim='variable', join='exact').sum(
           'variable', skipna=False)
   return total, weighted_per_variable_losses  # pytype: disable=bad-return-type
-#Note that the total is weighted, while the per_variable_losses are not
-#I changed this to weighted_per_variable_losses from per_variable_losses
+# Modified for graphcast-ic-lora: the diagnostics returned are the weighted
+# per-variable losses (upstream returns the unweighted ones); the total is unchanged.
 
 def retain_per_variable_losses(
     per_variable_losses: Mapping[str, xarray.DataArray],
@@ -295,7 +297,10 @@ def normalized_latitude_weights(data: xarray.DataArray) -> xarray.DataArray:
 
   return weights / weights.mean(skipna=False)
 
-#No restriction on latitude range so long as on grid.
+# Modified for graphcast-ic-lora: instead of requiring the latitudes to end at
+# +-(90 - d/2), requires every latitude to be a multiple of the spacing d, so that a
+# regional subset of a grid with poles (e.g. lat_min..lat_max on the 1-degree grid)
+# is accepted. Used only when the latitudes do not include a pole.
 def _weight_for_latitude_vector_without_poles(latitude):
   """Weights for uniform latitudes of the form [+-90-+d/2, ..., -+90+-d/2]."""
   delta_latitude = np.abs(_check_uniform_spacing_and_get_delta(latitude))
@@ -303,17 +308,6 @@ def _weight_for_latitude_vector_without_poles(latitude):
     raise ValueError(
         'Invalid latitude value (decimal not on grid).')
   return np.cos(np.deg2rad(latitude))
-
-
-# def _weight_for_latitude_vector_without_poles(latitude):
-#   """Weights for uniform latitudes of the form [+-90-+d/2, ..., -+90+-d/2]."""
-#   delta_latitude = np.abs(_check_uniform_spacing_and_get_delta(latitude))
-#   if (not np.isclose(np.max(latitude), 90 - delta_latitude/2) or
-#       not np.isclose(np.min(latitude), -90 + delta_latitude/2)):
-#     raise ValueError(
-#         f'Latitude vector {latitude} does not start/end at '
-#         '+- (90 - delta_latitude/2) degrees.')
-#   return np.cos(np.deg2rad(latitude))
 
 
 def _weight_for_latitude_vector_with_poles(latitude):

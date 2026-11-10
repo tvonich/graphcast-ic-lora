@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Modified for graphcast-ic-lora (see NOTICE): reads variable/level/time/region
-#   selection from the run config, uses losses.custom_weighted_mse, precipitation
-#   loss weight 0.0, processor rematerialization on.
+# Modified for graphcast-ic-lora (see NOTICE): reads the loss selection from the
+#   run config named by the j_path environment variable (at import), uses
+#   losses.custom_weighted_mse, precipitation loss weight 0.0, processor
+#   rematerialization on, logging setup.
 """A predictor that runs multiple graph neural networks on mesh data.
 
 It learns to interpolate between the grid and the mesh nodes, with the loss
@@ -46,10 +47,13 @@ import numpy as np
 import xarray, logging
 
 
-#Make Logger
+# Logging.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# The loss selection (variables, pressure levels, lat/lon region) is read from the
+# run config named by the j_path environment variable, so j_path must be set before
+# this module is imported. selected_times is passed on but not used by the loss.
 j_path = os.getenv('j_path')
 with open(j_path, 'r') as f:
     config = json.load(f)
@@ -421,7 +425,7 @@ class GraphCast(predictor_base.Predictor):
         inputs, targets_template=targets, forcings=forcings, is_training=True)
 
     # Compute loss.
-    loss = losses.custom_weighted_mse(    # modified: adds variable/level/time/region selection
+    loss = losses.custom_weighted_mse(    # modified: adds variable/level/region selection
         predictions, 
         targets, 
         per_variable_weights={
@@ -436,10 +440,10 @@ class GraphCast(predictor_base.Predictor):
             "10m_u_component_of_wind": 0.1,
             "10m_v_component_of_wind": 0.1,
             "mean_sea_level_pressure": 0.1,
-            # Precipitation is weighted 0.0 in all runs made with this code
-            # (DeepMind original = 0.1), so it contributes no loss or gradient.
-            # The loss is a pure weighted sum (losses.sum_per_variable_losses), so
-            # every other variable's loss/gradient is unchanged.
+            # Precipitation is weighted 0.0 here (DeepMind original: 0.1), so it
+            # contributes no loss or gradient. The loss is a weighted sum over
+            # variables (losses.sum_per_variable_losses), so the other variables'
+            # terms are unchanged.
             "total_precipitation_6hr": 0.0,
         },
         selected_times=selected_times,

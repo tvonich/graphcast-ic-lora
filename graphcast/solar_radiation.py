@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Modified for graphcast-ic-lora (see NOTICE): uses typing.Union instead of X | Y annotations (Python 3.9).
+# Modified for graphcast-ic-lora (see NOTICE): uses typing.Union instead of X | Y
+#   annotations (Python 3.9); data_array_like in get_toa_incident_solar_radiation_for_xarray
+#   defaults to None.
 """Computes TOA incident solar radiation compatible with ERA5.
 
 The Top-Of-the-Atmosphere (TOA) incident solar radiation is available in the
@@ -56,7 +58,7 @@ _SECONDS_PER_DAY = 60 * 60 * 24
 
 
 _TimestampLike = Union[str, pd.Timestamp, np.datetime64]  # Union instead of X | Y for Python 3.9
-_TimedeltaLike = Union[str, pd.Timedelta, np.timedelta64]#str | pd.Timedelta | np.timedelta64
+_TimedeltaLike = Union[str, pd.Timedelta, np.timedelta64]
 
 
 # Interface for loading Total Solar Irradiance (TSI) data.
@@ -524,8 +526,8 @@ def get_toa_incident_solar_radiation(
 
 
 def get_toa_incident_solar_radiation_for_xarray(
-    data_array_like: Union[xa.DataArray, xa.Dataset] = None, #xa.DataArray | xa.Dataset
-    tsi_data: Union[xa.DataArray, None] = None, #xa.DataArray | None = None
+    data_array_like: Union[xa.DataArray, xa.Dataset] = None,
+    tsi_data: Union[xa.DataArray, None] = None,
     integration_period: _TimedeltaLike = _DEFAULT_INTEGRATION_PERIOD,
     num_integration_bins: int = _DEFAULT_NUM_INTEGRATION_BINS,
     use_jit: bool = False,

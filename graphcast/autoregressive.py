@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Modified for graphcast-ic-lora (see NOTICE): adds a per-timestep loss (per_timestep_loss_and_diagnostics).
+# Modified for graphcast-ic-lora (see NOTICE): adds per_timestep_loss_and_diagnostics
+#   (the loss at each forecast step); uses xarray .sizes instead of .dims for
+#   dimension lengths.
 """A Predictor wrapping a one-step Predictor to make autoregressive predictions.
 """
 
@@ -77,7 +79,7 @@ class Predictor(predictor_base.Predictor):
         particular, no noise is added to the predictions that are fed back
         auto-regressively. Defaults to not adding noise.
       gradient_checkpointing: If True, gradient checkpointing will be
-        used at each step of the computation to save on memory. Rougthly this
+        used at each step of the computation to save on memory. Roughtly this
         should make the backwards pass two times more expensive, and the time
         per step counting the forward pass, should only increase by about 50%.
         Note this parameter will be ignored with a warning if the scan sequence

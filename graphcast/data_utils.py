@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Modified for graphcast-ic-lora (see NOTICE): adds the 'justify' option for aligning the input/target window.
+# Modified for graphcast-ic-lora (see NOTICE): adds a 'justify' option to
+#   extract_inputs_targets_forcings ('left', the default, takes the inputs from the
+#   start of the dataset; 'right' is the upstream behavior); prints the target lead
+#   times.
 """Dataset utilities."""
 
 from typing import Any, Mapping, Sequence, Tuple, Union

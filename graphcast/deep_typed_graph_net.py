@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Modified for graphcast-ic-lora (see NOTICE): adds optional per-layer rematerialization (hk.remat) of the processor.
+# Modified for graphcast-ic-lora (see NOTICE): adds optional per-layer
+#   rematerialization (hk.remat) of the processor (checkpoint_processor, off by
+#   default).
 """JAX implementation of Graph Networks Simulator.
 
 Generalization to TypedGraphs of the deep Graph Neural Network from:

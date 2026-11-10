@@ -1,13 +1,19 @@
 # Python environment for graphcast-ic-lora.
 #
-# Package versions are those of the tested environment (NCAR Derecho, NVIDIA A100 40 GB,
-# CUDA 12, cuDNN 8.9). jaxlib must be a CUDA 12 build that matches your system's CUDA
-# and cuDNN; see https://jax.readthedocs.io/en/latest/installation.html if the pinned
-# build below does not suit your machine.
+# Package versions are those of the tested environment (NCAR Derecho, NVIDIA A100 40 GB).
+#
+# CUDA: the pinned jaxlib (0.4.28+cuda12.cudnn89) is JAX's "local CUDA" build, which uses
+# CUDA libraries installed outside pip. This environment provides cuDNN 8.9. The other
+# CUDA 12 libraries (cuBLAS, cuFFT, cuSOLVER, cuSPARSE, nvJitLink, CUPTI) and the ptxas
+# compiler must come from a CUDA 12 toolkit on the machine: its lib64 directory on
+# LD_LIBRARY_PATH and its bin directory on PATH (on HPC systems, usually
+# `module load cuda`). In the tested runs, cuDNN came from this environment and the rest
+# from the system's CUDA 12.9.0. See https://jax.readthedocs.io/en/latest/installation.html
+# for other ways to install JAX with CUDA.
 #
 # Do NOT install DeepMind's "graphcast" package into this environment: the modified
-# copy in graphcast/ must be the one imported (run_lora_only.sh puts it first on
-# PYTHONPATH).
+# copy in graphcast/ must be the one imported (submit_jobs/run_lora_only.sh puts it
+# first on PYTHONPATH).
 #
 # Install:
 #   conda env create -f environment.yml
@@ -15,7 +21,6 @@
 
 name: graphcast-ic-lora
 channels:
-  - nvidia
   - conda-forge
 dependencies:
   - python=3.10
@@ -35,6 +40,9 @@ dependencies:
     - absl-py==2.1.0
     - typing_extensions==4.14.0
     - numpy==1.26.4
+    - ml-dtypes==0.5.1
+    - opt-einsum==3.3.0
+    - python-dateutil==2.9.0.post0
     - xarray==2025.6.1
     - pandas==2.3.1
     - dask==2025.7.0

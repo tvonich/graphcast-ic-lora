@@ -20,8 +20,11 @@ environment variable (example: configs/lora_only_2017-01-01T12.json). Main field
   lora_rank, lora_alpha, lora_sigma, lora_lr, lora_target, correction_mode
   ic_lr:          learning rate for IC optimizer (default 1e-3)
   n_optim_steps:  total steps when expanding_windows is not set
+                  (lora_then_ic always runs n_optim_steps on the full window)
   expanding_windows, steps_per_window: train on successively longer windows
-  patience:       early stopping patience per phase
+                  (all modes except lora_then_ic)
+  patience:       early stopping after this many steps without improvement
+                  (per window or phase)
   block_size:     K for alternating mode (default 10)
   lora_products_path: (optional) path to pre-trained LoRA products to
                       warm-start LoRA (useful for lora_then_ic mode)
@@ -828,7 +831,8 @@ elif joint_mode in ('lora_only', 'ic_only'):
             optimizer = adam(learning_rate=_win_lr(ic_lr / _wscale * _extra))
             opt_state = optimizer.init(norm_inputs)
         if is_expanding:
-            info(f'  Window LR /{_wscale:.3f} (exp={lr_window_exponent}, xtra={_extra}): ic_lr={ic_lr/_wscale*_extra:.6f}')
+            _lr_name, _lr_base = ('lora_lr', lora_lr) if joint_mode == 'lora_only' else ('ic_lr', ic_lr)
+            info(f'  Window LR /{_wscale:.3f} (exp={lr_window_exponent}, xtra={_extra}): {_lr_name}={_lr_base/_wscale*_extra:.6f}')
 
         best_loss = float('inf')
         no_improve = 0

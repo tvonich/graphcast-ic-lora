@@ -12,21 +12,35 @@ The graphcast/ directory is a modified copy of DeepMind's GraphCast code
 Copyright 2023 DeepMind Technologies Limited, licensed under the Apache License,
 Version 2.0. Files changed from that commit (each also carries a notice at the top):
 
-  autoregressive.py         adds a per-timestep loss (per_timestep_loss_and_diagnostics)
-  data_utils.py             adds the 'justify' option for aligning the input/target window
+  autoregressive.py         adds per_timestep_loss_and_diagnostics (the loss at each
+                            forecast step); uses xarray .sizes instead of .dims for
+                            dimension lengths
+  data_utils.py             adds a 'justify' option to extract_inputs_targets_forcings
+                            ('left', the default, takes the inputs from the start of the
+                            dataset; 'right' is the upstream behavior); prints the
+                            target lead times
   deep_typed_graph_net.py   adds optional per-layer rematerialization (hk.remat) of the
-                            processor (same math, less memory)
-  graphcast.py              reads variable/level/time/region selection from the run
-                            config; uses losses.custom_weighted_mse; precipitation loss
-                            weight 0.0 (original 0.1); processor rematerialization on
-  losses.py                 adds custom_weighted_mse and point_mse, with
-                            variable/level/time/region selection
-  predictor_base.py         whitespace only
+                            processor (checkpoint_processor; same math, less memory;
+                            off by default)
+  graphcast.py              at import, reads the loss selection (variables, levels,
+                            lat/lon region) from the run config named by the j_path
+                            environment variable; the loss is losses.custom_weighted_mse;
+                            precipitation loss weight 0.0 (upstream 0.1); processor
+                            rematerialization on; logging setup
+  losses.py                 adds custom_weighted_mse (the weighted MSE of
+                            weighted_mse_per_level with optional variable/level/region
+                            selection), point_mse and retain_per_variable_losses;
+                            sum_per_variable_losses returns the weighted per-variable
+                            losses as diagnostics (the total is unchanged); the latitude
+                            check for grids without poles accepts regional subsets;
+                            logging setup
   rollout.py                uses xarray .sizes instead of .dims for dimension lengths
-  solar_radiation.py        uses typing.Union instead of X | Y annotations (Python 3.9)
+  solar_radiation.py        uses typing.Union instead of X | Y annotations (Python 3.9);
+                            data_array_like in get_toa_incident_solar_radiation_for_xarray
+                            defaults to None
 
 graphcast/__init__.py is new (package marker). All other files in graphcast/ are
-unchanged from that commit.
+unchanged from that commit. The upstream test files (*_test.py) are not included.
 
 ------------------------------------------------------------------------------
 Model weights
@@ -34,5 +48,5 @@ Model weights
 The GraphCast model weights and normalization statistics are not included. They
 are published by DeepMind under the Creative Commons Attribution-NonCommercial-
 ShareAlike 4.0 International license (CC BY-NC-SA 4.0). LoRA weight corrections
-produced with this code are derived from those weights and are distributed under
-the same license.
+made with this code are derived from those weights and fall under the same
+license.
