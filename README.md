@@ -4,7 +4,7 @@
 > This repository is a research extension of GraphCast and includes a modified copy of its code.
 > If you use this code, please also cite the GraphCast paper (see [Citations](#citations)).
 
-Gradient-based optimization of the **initial conditions (IC)** and of **low-rank (LoRA) weight corrections** for DeepMind's [GraphCast](https://github.com/google-deepmind/graphcast) weather model (GraphCast_small: 1.0°, 13 pressure levels). The optimizer minimizes GraphCast's own training loss (a weighted mean-squared error against ERA5) over an autoregressive forecast. It can adjust a perturbation to the initial condition, a rank-*r* correction to the model weights, or both at once. This repository ships one worked example: a **LoRA-only** optimization of the 10-day forecast started at **2017-01-01 12 UTC**. It is not affiliated with or endorsed by Google DeepMind.
+Gradient-based optimization of the **initial conditions (IC)** and of **low-rank (LoRA) weight corrections** for DeepMind's [GraphCast](https://github.com/google-deepmind/graphcast) weather model (GraphCast_small: 1.0°, 13 pressure levels). The optimizer minimizes GraphCast's own training loss (a weighted mean-squared error against ERA5) over an autoregressive forecast. It can adjust a perturbation to the initial condition, a rank-*r* correction to the model weights, or both at once. This repository ships worked examples for the 10-day forecast started at **2017-01-01 12 UTC**: a **LoRA-only** optimization, and a **joint IC + LoRA** optimization in which a penalty sets how the correction is divided between the two. It is not affiliated with or endorsed by Google DeepMind.
 
 This is research code developed on NCAR's Derecho supercomputer, but it runs on any machine with a CUDA 12 GPU and ERA5 data in GraphCast's format.
 
@@ -31,11 +31,11 @@ This is research code developed on NCAR's Derecho supercomputer, but it runs on 
 
 | Item | Requirement |
 |------|-------------|
-| GPU | NVIDIA GPU with CUDA 12. The example (float32, 10-day window) was tested on an A100 with 40 GB. |
+| GPU | NVIDIA GPU with CUDA 12. The examples (float32, 10-day window) run on an A100 with 40 GB. |
 | Host memory | The whole input file is loaded into memory. Peak use was about 100 GB with the 30 GB one-year file used for testing; a file trimmed to the needed time steps (see [ERA5 Data Format](#era5-data-format)) needs much less. |
 | Python | 3.10, in the conda environment from `environment.yml` |
 | CUDA | A CUDA 12 toolkit on the machine (see the note at the top of `environment.yml`); cuDNN 8.9 comes with the environment |
-| Run time | About 25 minutes for the example on one A100 (150 optimization steps, then an 11-day evaluation) |
+| Run time | On one A100: about 40 minutes for the LoRA-only example (250 optimization steps) and about 25 minutes for each joint example (150 steps), each followed by an 11-day evaluation |
 
 ---
 
@@ -48,7 +48,7 @@ git clone https://github.com/tvonich/graphcast-ic-lora
 cd graphcast-ic-lora
 ```
 
-The modified GraphCast code is included in `graphcast/` (see [Changes to GraphCast](#changes-to-graphcast)). Do not clone or install DeepMind's `graphcast` package as well: the bundled copy must be the one that is imported, and `submit_jobs/run_lora_only.sh` puts it first on `PYTHONPATH`.
+The modified GraphCast code is included in `graphcast/` (see [Changes to GraphCast](#changes-to-graphcast)). Do not clone or install DeepMind's `graphcast` package as well: the bundled copy must be the one that is imported, and `submit_jobs/run_optimization.sh` puts it first on `PYTHONPATH`.
 
 ### 2. Download model weights and normalization statistics
 
@@ -77,7 +77,7 @@ This installs Python 3.10, JAX/jaxlib 0.4.28 (CUDA 12, cuDNN 8.9), dm-haiku 0.0.
 
 ### 4. Prepare the ERA5 input file
 
-The example needs ERA5 on GraphCast's 1.0° grid from 2017-01-01 06 UTC to 2017-01-12 12 UTC, in the layout described in [ERA5 Data Format](#era5-data-format). Set `dataset_file_path` in `configs/lora_only_2017-01-01T12.json` to your file (default: `data/era5_1deg_13lvl_2017-01.nc`).
+The examples need ERA5 on GraphCast's 1.0° grid from 2017-01-01 06 UTC to 2017-01-12 12 UTC, in the layout described in [ERA5 Data Format](#era5-data-format). Set `dataset_file_path` in the configs in `configs/` to your file (default: `data/era5_1deg_13lvl_2017-01.nc`).
 
 ---
 
@@ -87,25 +87,41 @@ After completing setup steps 1–4:
 
 ```bash
 # On any machine with a GPU, from the repository root:
-bash submit_jobs/run_lora_only.sh                      # the example configuration
-bash submit_jobs/run_lora_only.sh path/to/other.json   # any other configuration
+bash submit_jobs/run_optimization.sh                      # the LoRA-only example
+bash submit_jobs/run_optimization.sh path/to/other.json   # any other configuration
 
 # Or as a PBS job (e.g. on NCAR Derecho), submitted from the repository root.
 # First set your project code in the "#PBS -A" line of the script (or use qsub -A).
 mkdir -p logs
-qsub submit_jobs/run_lora_only.sh
-qsub -v RUN_CONFIG=path/to/other.json submit_jobs/run_lora_only.sh
+qsub submit_jobs/run_optimization.sh
+qsub -v RUN_CONFIG=path/to/other.json submit_jobs/run_optimization.sh
 ```
 
 The script activates the conda environment named by `CONDA_ENV` (default `graphcast-ic-lora`; set `CONDA_ENV=""` to use the active environment as is). It then stops if JAX cannot see a GPU, sets the environment variables listed under [For Agents](#environment-variables), and runs `batch_modules/optimize_ic_lora.py` from the repository root.
 
 A config path given on the command line is taken relative to the current directory. Relative paths inside the config (`dataset_file_path`, `save_root`) and the default `params/` and `stats/` locations are taken relative to the repository root. With PBS, the job log goes to `logs/`. A successful run ends its log with `// Complete //`.
 
+### Joint IC + LoRA optimization
+
+The joint examples optimize the IC perturbation and the LoRA factors together, with a size penalty that sets how the correction is divided between them (see [Design Notes](#design-notes)). The penalty is normalized by the size of each correction in an unpenalized joint solution for the same date, so this takes two runs:
+
+```bash
+# 1. Unpenalized joint run (Lambda = 0)
+bash submit_jobs/run_optimization.sh configs/joint_unpenalized_2017-01-01T12.json
+
+# 2. Copy final_S_IC and final_S_W from
+#    outputs/joint_unpenalized/2017-01-01T12/2017-01-01T12_r2_simultaneous_meta.json
+#    into S_IC_joint and S_W_joint of configs/joint_rho0_2017-01-01T12.json, then:
+bash submit_jobs/run_optimization.sh configs/joint_rho0_2017-01-01T12.json
+```
+
+The second config uses ρ = 0. For other values of ρ, change `rho` and `save_root` and keep the same `S_IC_joint` and `S_W_joint`.
+
 ---
 
 ## Configuration Reference
 
-A run is configured by one JSON file. The table lists the keys of the example, `configs/lora_only_2017-01-01T12.json`, plus three optional keys. Steps are 6-hour forecast steps.
+A run is configured by one JSON file. The table lists the keys of the LoRA-only example, `configs/lora_only_2017-01-01T12.json`, plus three optional keys. Steps are 6-hour forecast steps. The joint examples differ only in `joint_mode` (`simultaneous`), `steps_per_window` (30), `n_optim_steps` (150), `save_root`, and, for the penalized run, `Lambda` (0.3) and `S_IC_joint`/`S_W_joint`.
 
 | Key | Example | Description |
 |-----|---------|-------------|
@@ -117,16 +133,16 @@ A run is configured by one JSON file. The table lists the keys of the example, `
 | `lora_rank`, `lora_alpha` | `2`, `2` | Rank *r* and scale α of ΔW = (α/√*r*)·B·A. |
 | `lora_sigma` | (optional; default 0.01/√*r*) | Standard deviation of the initial entries of A. |
 | `lora_target` | `"processor_all"` | Weight matrices that receive a correction: all 64 weight matrices of the 16 processor layers. Other choices are listed in `get_target_keys` in `batch_modules/lora_utils.py`. |
-| `lora_lr`, `ic_lr` | `0.001`, `0.0005` | Base Adam learning rates for the LoRA factors and for the IC perturbation (`ic_lr` is unused in `lora_only`). |
+| `lora_lr`, `ic_lr` | `0.0005`, `0.0005` | Base Adam learning rates for the LoRA factors and for the IC perturbation (`ic_lr` is unused in `lora_only`). |
 | `expanding_windows` | `[8, 16, 24, 32, 40]` | Successive optimization windows in steps. Omit to optimize a single window of `pred_steps`. |
-| `steps_per_window` | `30` | Optimization steps per window: one integer, or a list with one entry per window. |
-| `n_optim_steps` | `150` | Number of steps when `expanding_windows` is not set (also used by `lora_then_ic`). |
+| `steps_per_window` | `50` | Optimization steps per window: one integer, or a list with one entry per window. |
+| `n_optim_steps` | `250` | Number of steps when `expanding_windows` is not set (also used by `lora_then_ic`); set to the total here for the log. |
 | `patience` | `1000` | Stop a window after this many steps without a new lowest loss (1000: never, here). |
-| `scale_lr_by_window`, `lr_window_exponent` | `true`, `0.5` | Learning rate in a window of T steps = base rate / max(T/4, 1)^exponent, i.e. divided by √(window length in days) here. |
+| `scale_lr_by_window`, `lr_window_exponent` | `true`, `1.0` | Learning rate in a window of T steps = base rate / max(T/4, 1)^exponent, i.e. divided by the window length in days here. |
 | `largest_window_lr_mult` | `1.0` | Extra learning-rate factor for the last window (1.0 = none). |
 | `lr_warmup_steps` | `0` | Length of a linear learning-rate ramp at the start of each window (0 = none). |
 | `rho`, `Lambda` | `0.0`, `0.0` | Size penalty that trades IC against weight corrections: λ_IC = Λ·e^(−ρ/2) and λ_W = Λ·e^(ρ/2) multiply S_IC/`S_IC_joint` and S_W/`S_W_joint`. `Lambda` = 0 switches it off. |
-| `S_IC_joint`, `S_W_joint` | (optional; defaults 489.5, 0.446) | Normalizers of the size penalty. Set them to `final_S_IC` and `final_S_W` from `meta.json` of an unpenalized `simultaneous` run for the same date. |
+| `S_IC_joint`, `S_W_joint` | (optional; defaults 489.5, 0.446) | Normalizers of the size penalty. Set them to `final_S_IC` and `final_S_W` from `meta.json` of an unpenalized `simultaneous` run for the same date (see [Joint IC + LoRA optimization](#joint-ic--lora-optimization)). |
 | `ic_laplacian_weight` | `0.0005` | Weight of the Laplacian smoothness penalty on the IC perturbation (no effect in `lora_only`). |
 | `laplacian_var_weights` | `null` | Per-variable weights of that penalty; `null` = equal weights. If the key is left out, built-in weights are used instead (geopotential 3; winds, mean sea-level pressure and precipitation 0.1). |
 | `log_every`, `per_ts_every` | `1`, `10` | Log the loss every N steps; record the loss at each lead time every N steps. |
@@ -152,7 +168,7 @@ Surface:        2m_temperature, mean_sea_level_pressure, 10m_u_component_of_wind
 
 ## Output Files
 
-Results go to `{save_root}/{init_date}/` (example: `outputs/lora_only/2017-01-01T12/`), with file names starting `2017-01-01T12_r2_lora_only_`:
+Results go to `{save_root}/{init_date}/` (example: `outputs/lora_only/2017-01-01T12/`), with file names starting `{init_date}_r{lora_rank}_{joint_mode}_` (example: `2017-01-01T12_r2_lora_only_`):
 
 | File | Contents |
 |---|---|
@@ -164,10 +180,10 @@ Results go to `{save_root}/{init_date}/` (example: `outputs/lora_only/2017-01-01
 | `control_per_ts_loss.npy` | per-step loss of the unmodified model over the training forecast (40 steps) |
 | `per_ts_loss.pkl` | per-step loss over the current window, every `per_ts_every` optimization steps (a pickled list of arrays, because the windows differ in length; saved as `.npy` when there is a single window) |
 | `grad_norms.npz` | gradient norm at every optimization step (`lora_norms`, `ic_norms`) |
-| `penalty_history.npz` | penalty terms at every step (joint modes only; empty in `lora_only` mode) |
+| `penalty_history.npz` | S_IC, S_W and the two size-penalty terms at every step (`simultaneous` mode only; empty otherwise) |
 | `meta.json` | run settings and summary numbers |
 
-The saved corrections are those with the lowest training loss in the last (longest) window; `eval_44step.npz` evaluates them.
+The saved corrections are those with the lowest training loss in the last (longest) window; `eval_44step.npz` evaluates them. In joint modes the training loss is the full objective, so the logged loss, `best_loss` and `Improvement over control` include the penalty terms; `eval_44step.npz` and the per-step losses hold the forecast loss alone.
 
 In `lora_only` mode the IC is not changed, so `ic_only` repeats `control` and `joint` repeats `joint_lora_only`. They still differ slightly (by 0.03 % and 0.3 % in the 44-step mean loss of the release check), because GPU computations are not bit-for-bit reproducible (see [Reproducibility](#reproducibility)).
 
@@ -207,7 +223,7 @@ The script reads one netCDF file in GraphCast's dataset layout (the same layout 
 * **LoRA.** Each targeted weight matrix W of the processor (all 64 weight matrices of the 16 message-passing layers) is replaced by W + ΔW, with ΔW = (α/√r)·B·A (rank-stabilized LoRA). B starts at zero and the entries of A are drawn from N(0, (0.01/√r)²) with a fixed seed, so ΔW = 0 at the start and the first forecast is GraphCast's own. Only A and B are trained; the GraphCast weights stay fixed.
 * **IC.** The perturbation is optimized in z-scored space (each input variable standardized by the mean and standard deviation of the initial condition itself over all grid points, separately for each pressure level and input time) and converted back before the forward pass. Both input times (`init_date` − 6 h and `init_date`) are perturbed; the static fields and forcings are not.
 * **Loss.** GraphCast's training loss: the mean over forecast steps and grid points of the squared error, normalized by the standard deviation of 6-hour differences and weighted by grid-cell area, pressure level and variable. The per-variable weights are DeepMind's, except that precipitation is weighted 0 (DeepMind: 0.1).
-* **Penalties** (joint modes). The size penalty (`rho`, `Lambda`) uses S_IC, the cos(latitude)-weighted sum of the squared z-scored IC perturbation, and S_W, the sum of the squared entries of all ΔW. The smoothness penalty (`ic_laplacian_weight`) is the cos(latitude)-weighted sum of the squared five-point Laplacian of the z-scored IC perturbation, computed on the grid. Both are off or have no effect in the example.
+* **Penalties** (joint modes). The size penalty (`rho`, `Lambda`) uses S_IC, the cos(latitude)-weighted sum of the squared z-scored IC perturbation, and S_W, the sum of the squared entries of all ΔW. The smoothness penalty (`ic_laplacian_weight`) is the cos(latitude)-weighted sum of the squared five-point Laplacian of the z-scored IC perturbation, computed on the grid. Neither has an effect in the LoRA-only example. The penalized joint example uses ρ = 0, Λ = 0.3 and a smoothness weight of 5×10⁻⁴ with equal weights for all variables; the unpenalized run keeps the smoothness penalty and sets Λ = 0.
 * **Precision.** `use_f32: true` runs the model in float32; the default, `false`, uses GraphCast's bfloat16.
 
 ### Optimization Windows
@@ -216,13 +232,13 @@ Forecast error grows with lead time, so a loss over a long window is dominated b
 
 ### Learning Rate
 
-The learning rate in each window is the base rate (`lora_lr`, `ic_lr`) divided by max(T/4, 1)^`lr_window_exponent`, where T is the window in steps. The example uses the square root: 1e-3/√2 ≈ 7.1e-4 for the 2-day window down to 1e-3/√10 ≈ 3.2e-4 for the 10-day window. As the window grows, the loss becomes more sensitive to each update, and a smaller rate avoids overshooting when the window widens.
+The learning rate in each window is the base rate (`lora_lr`, `ic_lr`) divided by max(T/4, 1)^`lr_window_exponent`, where T is the window in steps. The examples use exponent 1, i.e. the base rate divided by the window length in days: 5e-4/2 = 2.5e-4 for the 2-day window down to 5e-4/10 = 5e-5 for the 10-day window. As the window grows, the loss becomes more sensitive to each update, and a smaller rate avoids overshooting when the window widens.
 
 ---
 
 ## Reproducibility
 
-Runs are not bit-for-bit reproducible on GPUs, because some GPU operations (for example the scatter-adds in GraphCast's message passing) add numbers in a non-deterministic order. The optimization amplifies these last-digit differences. We checked this release against the original research code on the example, with one configuration on one NCAR Derecho node (A100 40 GB GPUs, float32):
+Runs are not bit-for-bit reproducible on GPUs, because some GPU operations (for example the scatter-adds in GraphCast's message passing) add numbers in a non-deterministic order. The optimization amplifies these last-digit differences. We checked this release against the original research code on one NCAR Derecho node (A100 40 GB GPUs, float32). The check used the LoRA-only example with earlier settings (30 steps per window, `lora_lr` 0.001, `lr_window_exponent` 0.5). Since then, the shipped settings have changed only configuration values, and the code only the wording of one log message. The joint examples were not part of the check.
 
 | Run | Training-loss reduction vs. control (10-day window) |
 |-----|------------------------------------------------------|
@@ -248,7 +264,7 @@ All four runs agree to about 1 part in 10⁵ at the first step. The two runs of 
 
 Every changed file says so at the top; `NOTICE` lists the changes file by file.
 
-`graphcast/graphcast.py` reads the loss selection from the config named by the `j_path` environment variable when it is imported. `submit_jobs/run_lora_only.sh` sets `j_path`; to use these modules from your own code, set it first.
+`graphcast/graphcast.py` reads the loss selection from the config named by the `j_path` environment variable when it is imported. `submit_jobs/run_optimization.sh` sets `j_path`; to use these modules from your own code, set it first.
 
 ---
 
@@ -297,7 +313,7 @@ This section provides structured information for automated tools or agents worki
 ### Pipeline Execution Order
 
 ```
-submit_jobs/run_lora_only.sh [config.json]      (bash, or qsub from the repository root)
+submit_jobs/run_optimization.sh [config.json]      (bash, or qsub from the repository root)
   → locates the repository; resolves the config path (argument, RUN_CONFIG, or the example)
   → activates CONDA_ENV (default graphcast-ic-lora; "" = keep the active environment)
   → stops unless JAX sees a GPU
@@ -335,8 +351,9 @@ submit_jobs/run_lora_only.sh [config.json]      (bash, or qsub from the reposito
 | `batch_modules/load_model.py` | Loads the weights and normalization statistics at import time |
 | `batch_modules/config.py` | Small helpers and the default dataset path |
 | `graphcast/` | Modified copy of DeepMind's GraphCast code (see `NOTICE`) |
-| `configs/lora_only_2017-01-01T12.json` | Example configuration |
-| `submit_jobs/run_lora_only.sh` | Run script (plain bash or PBS) |
+| `configs/lora_only_2017-01-01T12.json` | LoRA-only example |
+| `configs/joint_unpenalized_2017-01-01T12.json`, `configs/joint_rho0_2017-01-01T12.json` | Joint examples: unpenalized run, then penalized run (ρ = 0) |
+| `submit_jobs/run_optimization.sh` | Run script (plain bash or PBS) |
 | `environment.yml` | Conda environment (tested versions) |
 | `params/`, `stats/` | Weights and statistics (download separately, see Setup) |
 
@@ -345,7 +362,7 @@ submit_jobs/run_lora_only.sh [config.json]      (bash, or qsub from the reposito
 A successful run:
 1. ends its log with `// Complete //` and exits with status 0;
 2. writes `meta.json`, `lora_products.npz`, `lora_factors.npz`, `loss.npy` and `eval_44step.npz` to `{save_root}/{init_date}/`;
-3. for the example, logs `Improvement over control:` of about 70 % (69.5–71.5 % in the release check).
+3. logs `Improvement over control:`, the reduction of the training loss over the 10-day window relative to the unmodified forecast.
 
 ### Common Failure Modes
 
@@ -354,6 +371,7 @@ A successful run:
 | `JAX found no GPU` | No CUDA 12 toolkit visible to the pinned jaxlib (see `environment.yml`) or no GPU on the node |
 | `FileNotFoundError` for `params/...` or `stats/...` | Weights or statistics not downloaded, or `GRAPHCAST_PARAMS_PATH` / `GRAPHCAST_STATS_PATH` wrong |
 | `NameError: name 'start_index' is not defined` | `init_date` is not in the file's `datetime` coordinate |
+| `ValueError: could not convert string to float: "SET TO final_S_IC ..."` | `S_IC_joint` / `S_W_joint` in the penalized joint config not yet set from the unpenalized run |
 | `TypeError: expected str, bytes or os.PathLike object, not NoneType` at import | `j_path` is not set |
 | `Repository not found` | `qsub` was not run from the repository root |
 | CUDA out-of-memory error | GPU smaller than 40 GB, or another process on the same GPU |

@@ -1,15 +1,17 @@
 #!/bin/bash -l
 # =============================================================================
-# GraphCast LoRA-only optimization: run script (plain bash or PBS)
+# GraphCast IC / LoRA optimization: run script (plain bash or PBS)
 #
-# Optimizes a rank-2 LoRA correction to the GraphCast_small processor weights so
-# that the forecast started at 2017-01-01 12 UTC fits ERA5 over a 10-day window
-# (configs/lora_only_2017-01-01T12.json). One GPU; about 25 minutes on an A100.
+# Runs one optimization defined by a JSON config. The default is the LoRA-only
+# example (configs/lora_only_2017-01-01T12.json): a rank-2 LoRA correction to the
+# GraphCast_small processor weights, fitted so that the forecast started at
+# 2017-01-01 12 UTC matches ERA5 over a 10-day window. The joint IC + LoRA examples
+# are in configs/ as well (see README). One GPU; 25-40 minutes on an A100.
 #
 # USAGE (from the repository root):
-#   bash submit_jobs/run_lora_only.sh [path/to/config.json]   # any machine with a GPU
-#   mkdir -p logs && qsub submit_jobs/run_lora_only.sh        # PBS (e.g. NCAR Derecho)
-#   qsub -v RUN_CONFIG=path/to/config.json submit_jobs/run_lora_only.sh
+#   bash submit_jobs/run_optimization.sh [path/to/config.json]   # any machine with a GPU
+#   mkdir -p logs && qsub submit_jobs/run_optimization.sh        # PBS (e.g. NCAR Derecho)
+#   qsub -v RUN_CONFIG=path/to/config.json submit_jobs/run_optimization.sh
 #
 # With qsub, submit from the repository root (PBS runs a copy of this script, so
 # the repository is found through the submission directory) and set your project
@@ -24,7 +26,7 @@
 #PBS -N graphcast_ic_lora
 #PBS -A YOUR_PROJECT_CODE_HERE
 #PBS -l select=1:ncpus=4:ngpus=1:mem=120GB:gpu_type=a100
-#PBS -l walltime=00:30:00
+#PBS -l walltime=01:00:00
 #PBS -q develop
 #PBS -o logs
 #PBS -j oe

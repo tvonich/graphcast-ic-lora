@@ -12,7 +12,7 @@
 # for other ways to install JAX with CUDA.
 #
 # Do NOT install DeepMind's "graphcast" package into this environment: the modified
-# copy in graphcast/ must be the one imported (submit_jobs/run_lora_only.sh puts it
+# copy in graphcast/ must be the one imported (submit_jobs/run_optimization.sh puts it
 # first on PYTHONPATH).
 #
 # Install:
