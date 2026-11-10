@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below, and also cite GraphCast (Lam et al., 2023)."
+title: "graphcast-ic-lora: joint optimization of GraphCast initial conditions and low-rank weight corrections"
+authors:
+  - family-names: Vonich
+    given-names: P. Trent
+license: Apache-2.0
+repository-code: "https://github.com/tvonich/graphcast-ic-lora"
+references:
+  - type: article
+    title: "Learning skillful medium-range global weather forecasting"
+    authors:
+      - {family-names: Lam, given-names: Remi}
+      - {family-names: Sanchez-Gonzalez, given-names: Alvaro}
+      - {family-names: Willson, given-names: Matthew}
+      - {family-names: Wirnsberger, given-names: Peter}
+      - {family-names: Fortunato, given-names: Meire}
+      - {family-names: Alet, given-names: Ferran}
+      - {family-names: Ravuri, given-names: Suman}
+      - {family-names: Ewalds, given-names: Timo}
+      - {family-names: Eaton-Rosen, given-names: Zach}
+      - {family-names: Hu, given-names: Weihua}
+      - {family-names: Merose, given-names: Alexander}
+      - {family-names: Hoyer, given-names: Stephan}
+      - {family-names: Holland, given-names: George}
+      - {family-names: Vinyals, given-names: Oriol}
+      - {family-names: Stott, given-names: Jacklynn}
+      - {family-names: Pritzel, given-names: Alexander}
+      - {family-names: Mohamed, given-names: Shakir}
+      - {family-names: Battaglia, given-names: Peter}
+    journal: Science
+    volume: 382
+    issue: 6677
+    start: 1416
+    end: 1421
+    year: 2023
+    doi: 10.1126/science.adi2336

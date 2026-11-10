@@ -1,0 +1,38 @@
+graphcast-ic-lora
+Copyright 2024-2026 P. Trent Vonich
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+------------------------------------------------------------------------------
+GraphCast
+------------------------------------------------------------------------------
+The graphcast/ directory is a modified copy of DeepMind's GraphCast code
+(https://github.com/google-deepmind/graphcast, commit
+8debd7289bb2c498485f79dbd98d8b4933bfc6a7),
+Copyright 2023 DeepMind Technologies Limited, licensed under the Apache License,
+Version 2.0. Files changed from that commit (each also carries a notice at the top):
+
+  autoregressive.py         adds a per-timestep loss (per_timestep_loss_and_diagnostics)
+  data_utils.py             adds the 'justify' option for aligning the input/target window
+  deep_typed_graph_net.py   adds optional per-layer rematerialization (hk.remat) of the
+                            processor (same math, less memory)
+  graphcast.py              reads variable/level/time/region selection from the run
+                            config; uses losses.custom_weighted_mse; precipitation loss
+                            weight 0.0 (original 0.1); processor rematerialization on
+  losses.py                 adds custom_weighted_mse and point_mse, with
+                            variable/level/time/region selection
+  predictor_base.py         whitespace only
+  rollout.py                uses xarray .sizes instead of .dims for dimension lengths
+  solar_radiation.py        uses typing.Union instead of X | Y annotations (Python 3.9)
+
+graphcast/__init__.py is new (package marker). All other files in graphcast/ are
+unchanged from that commit.
+
+------------------------------------------------------------------------------
+Model weights
+------------------------------------------------------------------------------
+The GraphCast model weights and normalization statistics are not included. They
+are published by DeepMind under the Creative Commons Attribution-NonCommercial-
+ShareAlike 4.0 International license (CC BY-NC-SA 4.0). LoRA weight corrections
+produced with this code are derived from those weights and are distributed under
+the same license.

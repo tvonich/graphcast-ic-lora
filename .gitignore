@@ -1,0 +1,12 @@
+params/
+stats/
+data/
+outputs/
+__pycache__/
+*.pyc
+*.npz
+*.npy
+*.nc
+*.pkl
+*.log
+.ipynb_checkpoints/
